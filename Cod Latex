@@ -1,0 +1,351 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[romanian]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{verbatim}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{array, booktabs, float}
+ \lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  stringstyle=\color{red},
+  commentstyle=\color{gray},
+  showstringspaces=false,
+  frame=single,
+  breaklines=true,
+  tabsize=4
+}
+\lstset{basicstyle=\ttfamily, breaklines=true}
+
+\title{Problema satisfiabilitătii booleene (SAT) si
+algoritmii de rezolvare: DPLL, DP si
+Rezolutie}
+\author{Marin Laurentiu-Andrei\\
+Facultatea de Matematică și Informatică \\
+Universitatea de Vest din Timișoara, România \\
+Email: laurentiu.marin05@e-uvt.ro}
+\date{11 Mai 2025}
+\begin{document}
+\maketitle
+\begin{abstract}
+Problema satisfiabilității booleene (SAT) întreabă dacă există o atribuire de valori booleene care face o formulă booleană adevărată. Această problemă este centrală în teoria complexității computaționale, fiind primul exemplu de problemă \textit{NP-completă}, și apare în numeroase aplicații practice (verificare de modele, planificare, diagnostic etc.). În această lucrare prezentăm formal algoritmii clasici de rezolvare a SAT: metoda Davis–Putnam (DP), algoritmul DPLL (Davis–Putnam–Logemann–Loveland) și metoda rezoluției. Pentru fiecare algoritm oferim explicații formale și exemple, apoi comparăm complexitatea, completitudinea și eficiența lor. Discutăm situațiile în care un algoritm este preferat și cităm lucrări și surse educaționale relevante.% Citat [20], [1], etc.
+\end{abstract}
+\clearpage
+\tableofcontents
+\clearpage
+\section{Introducere}
+Problema satisfiabilității booleene (SAT) cere determinarea existenței unei atribuiri de valori {\em adevărat/fals} pentru variabilele unei formule booleene, astfel încât formula să evalueze la \textit{adevărat}. De exemplu, formula \(a \wedge \lnot b\) este satisfiabilă (prin \(a=1,b=0\)), în timp ce \(a \wedge \lnot a\) nu este satisfiabilă în nicio atribuire. În informatică teoretică, SAT este de mare importanță: este prima problemă demonstrată a fi NP-completă (teorema Cook–Levin), ceea ce înseamnă că, în principiu, orice problemă din NP poate fi redusă în timp polinomial la SAT și nu se cunoaște niciun algoritm eficient (polinomial) pentru SAT. În practică însă, algoritmi bine concepuți pot rezolve eficient multe instanțe mari de SAT. Problema apare în mod natural într-o varietate de domenii ale informaticii și inteligenței artificiale: verificarea modelelor (model checking), planificare, orare (scheduling), diagnosticare, proiectare de circuite și altele.De exemplu, conform Wikipedia, SAT este primul exemplu de problemă NP-completă și este utilizată în domenii precum planificarea și diagnosticarea în inteligența artificială, dar și în teoria calculului și criptografie.
+
+Istoric, primii algoritmi generali pentru SAT au fost propuși în anii 1960. În 1960, Davis și Putnam au introdus o metodă de rezoluție pentru satisfiabilitate, bazată pe eliminarea literei (variabilei) prin rezoluție. Un an mai târziu, Davis, Logemann și Loveland au îmbunătățit metoda prin adăugarea backtracking-ului (în loc de rezoluție globală), rezultând algoritmul DPLL. Algoritmul DPLL este complet, căutând prin spațiul interpretărilor și aplicând euristici de propagare a literelor unitate și literelor pure. Între algoritmii clasici considerați se numără deci: Davis–Putnam (DP), DPLL și metoda rezoluției propriu-zise, toate aplicate pe formule în forma normală conjunctivă (CNF). Secțiunile următoare descriu formal fiecare algoritm, urmate de comparații teoretice și un ghid bibliografic.
+
+\section*{Declarație de originalitate}
+Declar pe propria raspundere că această lucrare a fost realizată integral de mine and that all sources used au fost citat corespunzător. Orice contribuție externă este menționată clar, iar lucrarea nu a fost copiată sau plagiată din alte surse.
+
+Lucrarea este rezultatul muncii mele personale și respectă standardele de etică academică.
+
+\section{Algoritmi de rezolvare SAT}
+În continuare prezentăm fiecare algoritm de rezolvare SAT cu o descriere formală și exemple.
+
+\subsection{Algoritmul Davis--Putnam (DP)}
+
+Algoritmul Davis--Putnam (DP), propus în 1960, este un procedeu complet pentru determinarea satisfiabilității unei formule în forma normală conjunctivă (CNF), bazat pe metode de rezoluție și simplificări repetate.
+
+\begin{enumerate}
+  \item \textbf{Propagarea literelor unitate.}  
+    Când există o clauză compusă dintr-un singur literal, se aplică imediat valoarea care o satisface. Astfel, toate clauzele ce conțin acel literal sunt eliminate, iar aparițiile negării sale sunt eliminate din celelalte clauze. Acest pas se repetă până nu mai există clauze unitate.
+  \item \textbf{Eliminarea tautologiilor.}  
+    Se îndepărtează toate clauzele care conțin un literal și negația lui (de exemplu, o clauză de forma \(x \vee \lnot x \vee \dots\)), deoarece acestea sunt întotdeauna adevărate și nu influențează satisfiabilitatea globală.
+  \item \textbf{Eliminarea literelor pure.}  
+    O literă este considerată pură dacă apare doar cu aceeași polaritate (doar pozitiv sau doar negativ) în întreaga formulă. Orice clauză care conține un astfel de literal poate fi considerată satisfăcută prin alegerea corespunzătoare a valorii literalei, iar aceste clauze se elimină din formulă.
+  \item \textbf{Verificarea stării formulei.}
+    \begin{itemize}
+      \item Dacă nu mai rămân clauze, formula este satisfiabilă.
+      \item Dacă există o clauză goală, formula este nesatisfiabilă.
+    \end{itemize}
+  \item \textbf{Eliminarea variabilei prin rezoluție.}  
+    Dacă nu s-a ajuns la un rezultat, se selectează o literă care apare atât pozitiv, cât și negativ. Prin aplicarea regulii de rezoluție între toate perechile de clauze care o conțin cu semne opuse, se generează clauze noi (rezoluente) în care litera respectivă este eliminată. Apoi, toate clauzele care conțineau litera, cu oricare polaritate, sunt eliminate, iar procesul revine la pasul 1.
+\end{enumerate}
+
+\subsection{Algoritmul DPLL}
+
+Algoritmul DPLL (Davis--Putnam--Logemann--Loveland), dezvoltat în 1961, extinde ideea DP cu o strategie de backtracking și ramificare, fiind fundamentul solvers-urilor moderne.
+
+\begin{enumerate}
+  \item \textbf{Propagarea literelor unitate.}  
+    La fel ca în DP, orice literă care apare singură într-o clauză este evaluată astfel încât să o satisfacă, iar formulele sunt simplificate prin eliminarea clauzelor care o conțin și prin eliminarea aparițiilor negației sale.
+  \item \textbf{Eliminarea literelor pure.}  
+    Dacă un literal nu apare niciodată cu semn opus, i se poate atribui direct valoarea care satisface toate clauzele în care apare și apoi acele clauze sunt eliminate.
+  \item \textbf{Verificarea stării formulei.}
+    \begin{itemize}
+      \item O formulă vidă indică satisfiabilitate.
+      \item O clauză vidă indică nesatisfiabilitate.
+    \end{itemize}
+  \item \textbf{Ramificare și backtracking.}  
+    Dacă starea nu este decisă, se alege o literă neatribuită (de regulă conform unei euristici eficiente) și se încearcă două scenarii: atribuirea literalei cu \texttt{True} și atribuirea ei cu \texttt{False}. Pentru fiecare caz, se reiau pașii de propagare a literelor unitate și de eliminare a literelor pure, apoi se evaluează recursiv. Dacă oricare dintre ramuri duce la satisfiabilitate, concluzionăm că formula originală este satisfiabilă.
+\end{enumerate}
+DPLL menține, ca DP, completitudine și corectitudine. Cu toate acestea, DPLL lucrează prin construcție a unei interpretări pas cu pas și backtracking, fără a genera toate rezoluentele la fiecare pas. De aceea, DPLL tinde să fie mai eficient în practică. Performanța sa depinde foarte mult de alegerea literalei de ramificare. Rezultatul tipic este un arbore de căutare în care frunzele corespund unor interpretări complete. În implementări reale se păstrează și atribuirea curentă de litere pentru a extrage soluția în caz de succes. DPLL stă la baza celor mai mulți solvers moderne de SAT, care adaugă euristici (de exemplu VSIDS) și învățare de clauze.
+
+\subsection{Metoda rezoluției}
+Metoda clasică de rezoluție pentru satisfiabilitate folosește regula de inferență numită \emph{rezoluție}: din două clauze care conțin literali complementari se generează o nouă clauză (rezolventa) care conține toți ceilalți literați. Formal, dacă avem
+\[
+(A \vee \ell)\quad\text{și}\quad (B \vee \neg \ell),
+\]
+atunci se generează rezolventa \((A \vee B)\), eliminând \( \ell\) și \(\neg\ell\). De exemplu, din clauzele \((x \vee y)\) și \((\neg x \vee z)\) apare \((y \vee z)\). Algoritmul rezoluției repetă aplicarea acestei reguli sistematic:
+\begin{itemize}
+  \item Se caută două clauze din formulă ce conțin o literă \(l\) și negația ei \(\neg l\). 
+  \item Se obține rezolventa \((C \cup D) \setminus \{l,\neg l\}\). Dacă rezolventa conține atât \(l\) cât și \(\neg l\), atunci este un tautologie și se poate ignora.
+  \item Se adaugă rezolventa la setul de clauze, dacă nu a mai fost generată anterior. 
+  \item Dacă la un pas rezolventa este clauza vidă, algoritmul se oprește și formulea este declarat nesatisfiabilă (contradicție).
+  \item Se repetă până când nu mai pot fi obținute rezolvente noi. Dacă nu s-a găsit nicio clauză vidă, atunci se încheie și formula se consideră satisfiabilă (nu există dovadă a nesatisfiabilității).
+\end{itemize}
+În practică, acest procedeu de saturare a clauzelor poate genera un număr foarte mare de clauze. Teorema fundamentală este că rezoluția este \emph{refutation-complete} pentru logica propozițională: adică, dacă formula originală este nesatisfiabilă, aplicarea completă a rezoluției va produce clauza vidă. În schimb, dacă formula are o interpretare adevărată, procesul de rezoluție se va opri fără a produce clauza vidă.
+
+\section{Modelarea problemei SAT}
+O formulă booleană poate fi adesea rescrisă în forma normală conjunctivă (CNF), pentru a fi procesată de algoritmii DPLL, DP sau rezoluție. Conjunctiv normal formă (CNF) înseamnă că formula este o \emph{conjuncție} (AND) de una sau mai multe \emph{clauze}, fiecare clauză fiind o \emph{disjuncție} (OR) de literali. Un \emph{literal} este fie o variabilă booleana, fie negația ei. De exemplu, \( (x_1 \vee \neg x_2) \wedge (\neg x_1 \vee x_2 \vee x_3)\) este o formulă în CNF, cu două clauze. Orice formulă booleana generală poate fi transformată echivalent (sau echisatisfiabil) în CNF folosind legile algebrei booleene, deși această transformare poate crește (chiar exponențial) numărul de variabile și clauze. 
+
+Satisfiabilitatea se verifică prin găsirea unei \emph{atribuiri} de valori (True/False) pentru variabile, astfel încât fiecare clauză din CNF să fie adevărată (cel puțin un literal din clauză să fie True). Dacă o astfel de atribuire există, formula este satisfiabilă; altfel este nesatisfiabilă. În modele de implementare, formula CNF este reprezentată de obicei ca o listă (sau set) de clauze, și verificarea satisfiabilității constă în testarea recursivă a literelor, după cum au algoritmii DPLL sau DP. De reținut că și problema 3-SAT (fiecare clauză cu 3 literali) este NP-completă, așa că în general algoritmii trebuie să se bazeze pe backtracking și euristici.
+
+\section{Comparație teoretică între algoritmi}
+În ceea ce privește proprietățile teoretice, toți cei trei algoritmi prezentanți (DP, DPLL, rezoluție completă) sunt \emph{compleți} și au complexitate exponențială în cel mai rău caz. Concret:
+
+\begin{itemize}
+  \item {\em Complexitate:} SAT este NP-completă, deci toți algoritmii cunoscuți au complexitate exponențială în funcție de numărul de variabile.In general se precizează că doar algoritmi cu complexitate exponențială în worst-case sunt cunoscuți. DPLL (fără pruning suplimentar) poate explora în teorie \(O(2^n)\) ramuri, iar algoritmul DP prin rezoluție poate genera \(O(2^n)\) clauze în timpul rezolvare, cauzând un blow-up exponențial. În practică, instanțile reale pot fi rezolvate mult mai repede datorită cazurilor medii favorabile și euristicilor.
+  \item {\em Completitudine:} Datorită totalitatii, toți cei trei algoritmi sunt completi: dacă formula SAT are soluție, ei o vor găsi; altfel, vor termina prin a descoperi o contradicție (clauză vidă). În particular, rezoluția este refutation-complete pentru logica propozițională, iar DPLL (și DP) sunt algoritmi decizionali care determină în mod corect satisfiabilitatea formulei.
+  \item {\em Eficiență practică:}  DPLL, prin backtracking și aplicarea propagărilor, tinde să fie mai eficient pentru găsirea rapidă a unei soluții satisfiabile. Algoritmul DP poate fi avantajos dacă dorim să forțăm demonstrarea nesatisfiabilității (prin generarea completă de rezoluente), dar aceasta costă multă memorie. Rezoluția exhaustivă (precum DP) este utilă în analiză teoretică dar de cele mai multe ori prea scumpă în practică. Un avantaj al DPLL este că se poate opri imediat ce găsește o soluție, în timp ce DP poate continua să genereze rezoluente chiar dacă s-ar fi putut opri. 
+  \item {\em Memorie:} DPLL folosește memorie liniară (stivă de backtracking) şi menține doar formula curentă simplificată, în timp ce DP păstrează toate rezoluentele adăugate, ducând la consum memorie exponențial. Rezoluția completă face acelaşi lucru. Aici DPLL este preferat din nou în aplicații practice, deoarece utilizează spaţiu mai redus (conform constrângerilor de implementare simple).
+  \item {\em Euristici și cazuri speciale:} Performanța DPLL este puternic influențată de alegerea literei de ramificare. În practică, se folosesc euristici precum alegerea literalelor care apar frecvent în clauze scurte. Există și cazuri speciale de formule care pot fi rezolvate eficient: spre exemplu satisfiabilitatea clauzelor Horn se decide în timp polinomial prin algoritmi deterministici, iar 2-SAT are algoritm liniar (componentă tare). Însă aceste cazuri nu schimbă ordinea generală: în cazul general SAT rămâne dificil, iar DPLL este preferat pentru flexibilitatea sa. 
+\end{itemize}
+
+În concluzie, din punct de vedere teoretic, {\em niciun} algoritm nu scapă de explozia combinatorie a SAT; diferențele dintre DP, DPLL și rezoluție sunt legate de modul în care este gestionată această căutare: prin generarea de rezoluente sau prin backtracking inteligent. DPLL (și variantele sale cu învățare de clauze) domină practica modernă, iar DP/rezoluție rămân instrumente utile pentru studiu și demonstrații.
+
+\section{Compararea cu literatura}
+Problema SAT și algoritmii asociați sunt tratați pe larg în literatură. În manuale clasice de algoritmi, cum ar fi \emph{Introduction to Algorithms} (Cormen et al.), satisfiabilitatea este prezentată ca prototip de problemă NP-completă. Donald Knuth abordează de asemenea SAT în fasciculele din \emph{The Art of Computer Programming}, arătând importanța sa teoretică și bazele algoritmice. În surse online, Wikipedia oferă articole detaliate: de exemplu articolul „Boolean satisfiability problem” definește problema și subliniază NP-completitudinea, iar articolul „DPLL algorithm” prezintă algoritmul DPLL și pseudocodul aferent. Site-ul GeeksforGeeks oferă explicații didactice pas-cu-pas; de pildă, ilustrează regula de rezoluție prin exemple simple. 
+
+Numeroase cursuri și pagini academice (de la universități precum CMU, Princeton, Berkeley) explică SAT și algoritmi DPLL/DP în notele de curs. De exemplu, cursurile de complexitate menționează SAT ca exemplu central (NP-complet), iar seminarul de inteligență artificială introduce rezoluția în context logicii propoziționale. Lucrări de cercetare și cărți de specialitate (de ex. libri despre SAT solving) descriu variante moderne. În general, toată literatura confirmă că algoritmul DPLL este considerat baza solvers profesioniști, iar rezoluția apare ca fundament teoretic. 
+\section{Implementare}
+
+\subsection{Sistemul de Rezolvare a Problemelor de Satisfiabilitate (SAT) în 2-CNF}
+
+Acest sistem include trei algoritmi principali pentru rezolvarea problemelor de satisfiabilitate (SAT) în formule 2-CNF, fiecare având propriile sale utilitare pentru parsare, validare, generare și testare a formulelor. Algoritmii sunt următorii:
+
+\begin{enumerate}
+    \item \textbf{DPLL cu propagare a literelor unitare și euristică Jeroslow–Wang}: O versiune optimizată a algoritmului DPLL, care folosește propagarea literelor unitare și o euristică bazată pe impactul literelor pentru a îmbunătăți eficiența.
+    \item \textbf{DP (Rezolutie clasică)}: Aplicarea repetată a rezoluției pentru eliminarea variabilelor, până când se ajunge la o soluție satisfiabilă sau se demonstrează nesatisfiabilitatea.
+    \item \textbf{Rezoluție completă}: Algoritm care generează exhaustiv rezolvente, continuând până când se detectează o contradicție sau se epuizează opțiunile.
+\end{enumerate}
+
+\subsection{Parsare și Validare Sintactică}
+
+\begin{itemize}
+    \item \texttt{valida\_2cnf\_sintaxa(formula\_str)}: Verifică sintaxa formulei 2-CNF, asigurându-se că toate clauzele și parantezele sunt corect formate.
+\begin{lstlisting}
+def valida_2cnf_sintaxa(formula_str):
+    formula_str = formula_str.replace(" ", "")
+    if not re.fullmatch(r'[\w\-|&()]+', formula_str):
+        return False
+    clauze = split_clauze(formula_str)
+    for clauza in clauze:
+        clauza = clauza.strip('()')
+        literali = re.split(r'\|', clauza)
+        if len(literali) != 2:
+            return False
+        for lit in literali:
+            if not re.fullmatch(r'-?\w+', lit):
+                return False
+    return True
+\end{lstlisting}
+    \item \texttt{split\_clauze(formula\_str)}: Împarte formula 2-CNF în clauze pe baza operatorilor și parantezelor.
+    \item \texttt{formula\_parsata(input\_str)}: Transformă un șir valid într-o listă de clauze, fiecare reprezentată de o listă de literali.
+\end{itemize}
+\subsection{Algoritmul DPLL cu Propagarea Literelor Unitare}
+\begin{itemize}
+    \item \texttt{propagarea\_unitatii(formula, assignment)}: Aplică regula literelor unitare și actualizează formula și atribuirea de litere.
+    \begin{lstlisting}[language=Python]
+def propagarea_unitatii(formula, assignment, verbose=False):
+    changed = True
+    while changed:
+        changed = False
+        if verbose:
+            print(f"\n[Unit Propagate] Clauze: {formula}")
+            print(f"Atribuire curenta: {assignment}")
+        for clause in formula[:]:
+            if len(clause) == 1:
+                lit = clause[0]
+                if isinstance(lit, str):
+                    neg_lit = lit[1:] if lit.startswith('-') else f"-{lit}"
+                else:
+                    neg_lit = -lit
+
+                if neg_lit in assignment:
+                    return None, None
+                if lit not in assignment:
+                    if verbose:  # Fix aici
+                        print(f"-> Alocam {lit} din clauza unitara {clause}")
+                    assignment.add(lit)
+                    changed = True
+                    #...restul codului
+\end{lstlisting}
+    \item \texttt{jeroslow\_wang\_heuristic(formula, assignment)}: Alege variabila cu cel mai mare impact în funcție de euristica Jeroslow-Wang.
+    \item \texttt{dpll(formula, assignment, verbose)}: Implementarea recursivă a algoritmului DPLL, care include pașii de propagare a literelor unitare, utilizarea euristicii și backtracking.
+    \begin{lstlisting}
+def dpll(formula, assignment=None, verbose=False):
+    if assignment is None:
+        assignment = set()
+    if verbose:
+        print(f"\n[DPLL] Cautare cu asignarea: {assignment}")
+    if all(satisfies_clause(clause, assignment) for clause in formula):
+        return True, assignment
+    if any(not clause for clause in formula):
+        return False, None
+    formula, assignment = propagarea_unitatii(formula, assignment, verbose)
+    if formula is None: 
+        return False, None
+    var = jeroslow_wang_heuristic(formula, assignment)
+    if var is None:
+        return False, None 
+    for value in [var, f"-{var}" if isinstance(var, str) else -var]:
+        new_assignment = set(assignment) | {value}
+        sat, result = dpll(formula, new_assignment, verbose)  # Fix aici
+        if sat:
+            return sat, result
+    return False, None
+\end{lstlisting}
+\end{itemize}
+\clearpage
+\subsection{Algoritmul DP (Rezolutie Clasică)}
+
+\begin{itemize}
+    \item \texttt{scoate\_tautologii(formula)}: Elimină clauzele tautologice (care sunt întotdeauna adevărate).
+    \item \texttt{dp(formula, verbose)}: Algoritmul DP rezolvă formula prin selecția unei variabile și generarea rezolventelor, iterând pentru a obține o formulă mai simplă.
+    \lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  stringstyle=\color{red},
+  commentstyle=\color{gray},
+  showstringspaces=false,
+  frame=single,
+  breaklines=true,
+  tabsize=4
+}
+
+\begin{lstlisting}
+def dp(formula, verbose=False):
+    formula = [set(clause) for clause in formula]
+    formula = scoate_tautologii(formula)  # Pas 1: Elimina tautologiile initiale
+    step = 0
+
+    while True:
+        formula = scoate_tautologii(formula)  # Pas 2: Curata formula la fiecare iteratie
+
+        if verbose:
+            print(f"\n=== Pasul {step} ===")
+            print("Formula curenta:")
+            for i, clause in enumerate(formula, 1):
+                print(f"Clauza {i}: {clause}")
+            print("=" * 40)
+
+        # Verifica daca exista variabile ramase
+        vars_in_formula = set()
+        for clause in formula:
+            for lit in clause:
+                var = lit[1:] if lit.startswith('-') else lit
+                vars_in_formula.add(var)
+        if not vars_in_formula:
+            if verbose:
+                print("Nu exista variabile ramase - Formula SATISFIABILA")
+            return True  # Formula este satisfiabila
+            ...
+\end{lstlisting}
+
+\end{itemize}
+\clearpage
+\subsection{Rezoluție Completă}
+
+\begin{itemize}
+    \item \texttt{resolve(c1, c2)}: Generează rezolventele între două clauze care nu sunt tautologice.
+    \item \texttt{resolutie\_solver(formula, verbose, max\_steps)}: Algoritm exhaustiv de rezoluție, care oprește procesul la detectarea unei contradicții, la epuizarea clauzelor sau la atingerea unui număr maxim de pași.
+\end{itemize}
+
+\subsection{Generare și Testare}
+
+\begin{itemize}
+    \item \texttt{genereaza\_2cnf\_formula(n\_vars, n\_clauses, force\_unsat)}: Generează aleator o formulă 2-CNF satisfiabilă sau nesatisfiabilă, pe baza parametrilor specificați.
+    \item \texttt{run\_tests\_from\_file(filename, algorithm, verbose)}: Rulează teste predefinite dintr-un fișier și raportează rezultatele, comparând cu valorile așteptate.
+\end{itemize}
+
+\subsection{Interfața Interactivă}
+
+Funcția principală \texttt{run()} oferă un meniu interactiv, permițând utilizatorului să aleagă din următoarele opțiuni:
+\begin{lstlisting}
+    options = [
+        "1: Introducere manuala formula",
+        "2: Generare automata formula",
+        "3: Testare din fisier",
+        "4: Iesire"
+    ]
+\end{lstlisting}
+
+După introducerea formulei, utilizatorul selectează algoritmul dorit și nivelul de detaliu (\texttt{verbose}), iar apoi sunt afișate rezultatele, incluzând informații precum:
+\begin{itemize}
+    \item Satisfiabilitatea formulei (SAT/UNSAT).
+    \item Timpul de execuție al algoritmului.
+    \item Pașii de validare efectuați.
+\end{itemize}
+\subsection{Analiza eficienței}
+\begin{table}[H]
+\centering
+\small
+\caption{Comparație algoritmi}
+\label{tab:complexitate}
+\begin{tabular}{@{}lp{3cm}p{5cm}@{}}
+\toprule
+\textbf{Algoritm} & \textbf{Complexitate} & \textbf{Observații} \\ 
+\midrule
+DPLL + heuristică & $O(2^n)$ & 
+    Euristică Jeroslow-Wang și propagarea unităților reduc spațiul de căutare. \\
+\addlinespace
+DP (rezoluție) & $O(4^n)$ & 
+    Stocarea rezolventelor poate genera supraîncărcare de memorie datorită numărului exponențial de clauze. \\
+\addlinespace
+Rezoluție completă & $O(m^2 \cdot 2^n)$ & 
+    Pot apărea multe rezolvente redundante; utilă pentru verificări exhaustive. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Concluzii și direcții viitoare}
+Am prezentat problema SAT și trei metode clasice de rezolvare: algoritmul Davis–Putnam (DP), algoritmul DPLL și metoda rezoluției. Fiecare are avantaje şi limite: DP oferă o abordare formală prin rezoluție, DPLL este practic prin backtracking şi propagări, iar rezoluția asigură completitudinea de teoremă (demonstrarea nesatisfiabilității). În practică, cele mai multe solvere SAT moderne sunt bazate pe DPLL extins, adăugând tehnici avansate de învățare a clauzelor (CDCL) și euristici sofisticate. De fapt, în competițiile de satisfiabilitate din ultimii ani, primele locuri au fost ocupate de implementări DPLL/CDCL (de ex. zChaff, MiniSat). 
+
+Ca direcții viitoare, cercetările se concentrează pe îmbunătățirea solvelor SAT prin:
+\begin{itemize}
+  \item {\em Conflict-Driven Clause Learning (CDCL):} îmbunătățește DPLL prin învățarea clauzelor conflictului la ramificare, reducând retraversarea spațiului de căutare.
+  \item {\em Algoritmi locali (WalkSAT, etc.):} pentru instanțe foarte mari sau variante de satisfiabilitate aproximativă, se folosesc metode stocastice care schimbă litere la întâmplare și caută optimizare locală.
+  \item {\em Solvere industriale:} implementări scalabile (ex. MiniSat, Glucose, Lingeling) care gestionează milioane de variabile şi iau în considerare optimizări de memorie și multithreading.
+  \item {\em Extinderi ale problemei:} SAT cu costuri (Max-SAT), SAT cu formule cuantificate (QSAT/ QBF), satisfiabilitate în teoreme logice mai complexe sunt de asemenea cercetate, păstrând legătura cu SAT-ul de bază.
+\end{itemize}
+În ciuda faptului că SAT rămâne NP-completă în general, progresul în materie de solvers este spectaculos, permițând rezolvarea automată a unor cazuri mari în practică. Prin urmare, problema satisfiabilității continuă să fie un domeniu activ de cercetare, cu aplicații concrete în ingineria software, inteligența artificială și teoria algoritmilor. 
+
+\begin{thebibliography}{9}
+\bibitem{}https://github.com/AndreiMarin03
+\bibitem{Wiki-SAT} Wikipedia: “Boolean satisfiability problem”, encyclopedia entry (engl.), last edited 9 May 2025
+\bibitem{}https://en.wikipedia.org/wiki/DPLL-algorithm
+\bibitem{}https://www.sciencedirect.com/topics/computer-science/satisfiability-problem
+\bibitem{}en.wikipedia.org/wiki/Davis–Putnam-algorithm
+\bibitem{}https://www.cs.princeton.edu/courses/archive/fall21/cos326/lec/23-01-sat.pdf
+\bibitem{}https://en.wikipedia.org/wiki/Resolution(logic)
+\bibitem{GFG-Res} GeeksforGeeks: „Resolution Algorithm in AI”.
+\bibitem{CLRS} T. H. Cormen et al., \emph{Introduction to Algorithms}, 3rd ed., MIT Press, 2009.
+\bibitem{Knuth} D. E. Knuth, \emph{The Art of Computer Programming, Vol. 4A–4B: Combinatorial Algorithms, Fascicle 6: Satisfiability}, Addison-Wesley, 2015.
+\bibitem{}Biere, A.; Heule, M.; van Maaren, H.; Walsh, T. (eds.) Handbook of Satisfiability. Frontiers in Artificial Intelligence and Applications, Vol.185, IOS Press, 2009
+\bibitem{}Franco, J.; Martin, J. A History of Satisfiability. In: Handbook of Satisfiability (2nd ed.), Frontiers in AI and Applications 336, IOS Press, 2021
+\end{thebibliography}
+
+\end{document}
