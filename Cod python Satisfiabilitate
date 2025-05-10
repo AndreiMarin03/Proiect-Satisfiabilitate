@@ -1,0 +1,522 @@
+import re
+import random
+from collections import defaultdict
+
+
+def valida_2cnf_sintaxa(formula_str):
+    formula_str = formula_str.replace(" ", "")
+    if not re.fullmatch(r'[\w\-∨∧()]+', formula_str):
+        return False
+    clauze = split_clauze(formula_str)
+    for clauza in clauze:
+        clauza = clauza.strip('()')
+        literali = re.split(r'∨', clauza)
+        if len(literali) != 2:
+            return False
+        for lit in literali:
+            if not re.fullmatch(r'-?\w+', lit):
+                return False
+    return True
+def split_clauze(formula_str):
+    clauze = []
+    stack = 0
+    curent = []
+    for char in formula_str:
+        if char == '(': stack += 1
+        elif char == ')': stack -= 1
+        curent.append(char)
+        if char == '∧' and stack == 0:
+            clauze.append(''.join(curent[:-1]).strip())
+            curent = []
+    if curent:
+        clauze.append(''.join(curent).strip())
+    return clauze
+
+
+def formula_parsata(input_str):
+    try:
+        input_str = input_str.replace(" ", "")
+        print("\n[PARSARE] Input inițial:", input_str)
+
+        if not valida_2cnf_sintaxa(input_str):
+            raise ValueError("Formula nu este în 2-CNF valid!")
+
+        clauze = split_clauze(input_str)
+        formula = []
+        for clauza in clauze:
+            clauza = clauza.strip('()')
+            literali = [lit.strip() for lit in clauza.split('∨')]
+            formula.append(literali)
+
+        return formula
+
+    except Exception as e:
+        print(f"\n[EROARE] {str(e)}")
+        print("Exemple valide: (a ∨ -b) ∧ (c ∨ d), (1 ∨ -2) ∧ (-x3 ∨ y)")
+        return None
+def propagarea_unitatii(formula, assignment, verbose=False):
+    changed = True
+    while changed:
+        changed = False
+        if verbose:
+            print(f"\n[Unit Propagate] Clauze: {formula}")
+            print(f"Atribuire curentă: {assignment}")
+        for clause in formula[:]:
+            if len(clause) == 1:
+                lit = clause[0]
+                if isinstance(lit, str):
+                    neg_lit = lit[1:] if lit.startswith('-') else f"-{lit}"
+                else:
+                    neg_lit = -lit
+
+                if neg_lit in assignment:
+                    return None, None
+                if lit not in assignment:
+                    if verbose:  # Fix aici
+                        print(f"⇒ Alocăm {lit} din clauza unitară {clause}")
+                    assignment.add(lit)
+                    changed = True
+                    formula = [c for c in formula if lit not in c]
+                    formula = [[l for l in c if l != neg_lit] for c in formula]
+    return formula, assignment
+
+def jeroslow_wang_heuristic(formula, assignment):
+    literal_counts = defaultdict(int)
+    for clause in formula:
+        # Ignoră clauzele deja satisfăcute
+        if any(lit in assignment for lit in clause):
+            continue
+        for lit in clause:
+            if isinstance(lit, str):
+                neg_lit = lit[1:] if lit.startswith('-') else f"-{lit}"
+            else:
+                neg_lit = -lit
+
+            if neg_lit not in assignment:  # Literalul nu e fals încă
+                var = lit[1:] if isinstance(lit, str) and lit.startswith('-') else lit
+                literal_counts[var] += 1
+    return max(literal_counts, key=literal_counts.get, default=None)
+
+
+def satisfies_clause(clause, assignment):
+    return any(lit in assignment for lit in clause)
+
+
+def dpll(formula, assignment=None, verbose=False):
+    if assignment is None:
+        assignment = set()
+    if verbose:
+        print(f"\n[DPLL] Căutare cu asignarea: {assignment}")
+    # Verifică dacă toate clauzele sunt satisfăcute
+    if all(satisfies_clause(clause, assignment) for clause in formula):
+        return True, assignment
+
+    # Dacă există o clauză goală (nesatisfăcută)
+    if any(not clause for clause in formula):
+        return False, None
+
+    formula, assignment = propagarea_unitatii(formula, assignment, verbose)
+    if formula is None:  # Contradicție în unit_propagate
+        return False, None
+
+    var = jeroslow_wang_heuristic(formula, assignment)
+    if var is None:
+        return False, None  # Nu mai sunt variabile, dar clauzele nu sunt toate satisfăcute
+
+    for value in [var, f"-{var}" if isinstance(var, str) else -var]:
+        new_assignment = set(assignment) | {value}
+        sat, result = dpll(formula, new_assignment, verbose)  # Fix aici
+        if sat:
+            return sat, result
+
+    return False, None
+
+
+def dp(formula, verbose=False):
+    formula = [set(clause) for clause in formula]
+    formula = scoate_tautologii(formula)  # Pas 1: Elimină tautologiile inițiale
+    step = 0
+
+    while True:
+        formula = scoate_tautologii(formula)  # Pas 2: Curăță formula la fiecare iterație
+
+        if verbose:
+            print(f"\n=== Pasul {step} ===")
+            print("Formula curentă:")
+            for i, clause in enumerate(formula, 1):
+                print(f"Clauza {i}: {clause}")
+            print("=" * 40)
+
+        # Verifică dacă există variabile rămase
+        vars_in_formula = set()
+        for clause in formula:
+            for lit in clause:
+                var = lit[1:] if lit.startswith('-') else lit
+                vars_in_formula.add(var)
+        if not vars_in_formula:
+            if verbose:
+                print("Nu există variabile rămase - Formula SATISFIABILĂ")
+            return True
+
+        # Alege variabila de rezolvat
+        x = next(iter(vars_in_formula))
+        if verbose:
+            print(f"\nProcesare variabilă: {x}")
+
+        # Identifică clauzele pozitive și negative
+        pos = [c for c in formula if x in c]
+        neg = [c for c in formula if f"-{x}" in c]
+
+        if verbose:
+            print(f"Clauze pozitive ({len(pos)}): {pos}")
+            print(f"Clauze negative ({len(neg)}): {neg}")
+
+        # Generează rezolventele și elimină tautologiile
+        resolvents = []
+        for c1 in pos:
+            for c2 in neg:
+                resolvent = (c1 | c2) - {x, f"-{x}"}
+                if resolvent:  # Ignoră rezolventele vide
+                    # Verifică dacă rezolventul este tautologie
+                    is_tautology = any(
+                        (lit in resolvent and f"-{lit}" in resolvent)
+                        or (f"-{lit}" in resolvent and lit in resolvent)
+                        for lit in resolvent
+                    )
+                    if not is_tautology:
+                        resolvents.append(resolvent)
+                else:
+                    if verbose:
+                        print("═" * 60)
+                        print("❗ S-a generat clauza vidă!")
+                        print("═" * 60)
+                    return False
+
+        # Construiește noua formulă
+        new_formula = [
+            c for c in formula
+            if x not in c and f"-{x}" not in c
+        ] + resolvents
+
+        formula = new_formula
+        step += 1
+
+        if verbose:
+            print(f"\nNoua formulă după pasul {step}:")
+            for i, clause in enumerate(formula, 1):
+                print(f"Clauza {i}: {clause}")
+            print("=" * 40)
+def genereaza_2cnf_formula(n_vars, n_clauses, force_unsat=False):
+    formula = []
+    vars_list = [str(i + 1) for i in range(n_vars)] + [chr(ord('a') + i) for i in range(min(n_vars, 26))]
+
+    # Generăm o atribuire aleatoare pentru a asigura satisfiabilitatea
+    assignment = {var: random.choice([True, False]) for var in vars_list}
+
+    for _ in range(n_clauses):
+        # Alegem doi literali care nu sunt amândoi falși în atribuire
+        valid = False
+        attempts = 0
+        while not valid and attempts < 100:
+            a_var = random.choice(vars_list)
+            a_neg = random.choice([True, False])
+            a_lit = f"-{a_var}" if a_neg else a_var
+            a_val = not a_neg if assignment[a_var] else a_neg
+
+            b_var = random.choice(vars_list)
+            b_neg = random.choice([True, False])
+            b_lit = f"-{b_var}" if b_neg else b_var
+            b_val = not b_neg if assignment[b_var] else b_neg
+
+            if a_val or b_val:  # Cel puțin un literal adevărat
+                formula.append([a_lit, b_lit])
+                valid = True
+            attempts += 1
+
+        if not valid:
+            # Caz de urgență dacă nu găsim clauză validă
+            formula.append([random.choice(vars_list), random.choice(vars_list)])
+
+    if force_unsat:
+        # Adăugăm contradicție controlată
+        x = random.choice(vars_list)
+        formula.extend([
+            [x, x],
+            [f"-{x}", f"-{x}"]
+        ])
+
+    # Verificare finală de consistență
+    if not force_unsat:
+        # Verificare finală de consistență
+        assert dpll(formula.copy(), verbose=False)[0], "Formula generată trebuie să fie satisfiabilă!"
+    return formula
+def formula_to_string(formula):
+    return " ∧ ".join(f"({a} ∨ {b})" for a, b in formula)
+
+
+def print_formula_tabel(formula):
+    """Afișează formula în format tabelar"""
+    print("\nFormula în format tabelar:")
+    print("Clauza | Literal 1 | Literal 2")
+    print("-" * 30)
+    for i, clause in enumerate(formula, 1):
+        if len(clause) != 2:
+            print(f"Clauză invalidă la poziția {i}: {clause}")
+            continue
+        l1, l2 = clause
+        print(f"{i:^6} | {str(l1):^8} | {str(l2):^8}")
+def scoate_tautologii(formula):
+    clean_formula = []
+    for clause in formula:
+        is_tautology = False
+        for lit in clause:
+            neg_lit = f"-{lit}" if not lit.startswith('-') else lit[1:]
+            if neg_lit in clause:
+                is_tautology = True
+                break
+        if not is_tautology:
+            clean_formula.append(clause)
+    return clean_formula
+def resolve(c1, c2):
+    """Generează rezolventele ne-tautologice pentru două clauze."""
+    resolvents = []
+    for lit in c1:
+        neg_lit = lit[1:] if lit.startswith('-') else f"-{lit}"
+        if neg_lit in c2:
+            new_clause = (c1 | c2) - {lit, neg_lit}
+            # Verifică dacă rezolventul este tautologie
+            is_tautology = any(
+                (l in new_clause and f"-{l}" in new_clause)
+                or (f"-{l}" in new_clause and l in new_clause)
+                for l in new_clause
+            )
+            if not is_tautology:
+                resolvents.append(new_clause)
+    return resolvents
+
+def resolutie_solver(formula, verbose=False, max_steps=100):
+    formula = [set(clause) for clause in formula]
+    formula = scoate_tautologii(formula)  # Elimină tautologiile inițiale
+    derived = set()
+    step = 0
+
+    if verbose:
+        print("\n[REZOLUȚIE] Pas 0: Formula inițială")
+        for i, clause in enumerate(formula, 1):
+            print(f"Clauza {i}: {clause}")
+
+    while step < max_steps:
+        new_clauses = []
+        pairs = [(i, j) for i in range(len(formula)) for j in range(i + 1, len(formula))]
+
+        for i, j in pairs:
+            c1 = formula[i]
+            c2 = formula[j]
+            resolvents = resolve(c1, c2)  # Generează rezolvente ne-tautologice
+
+            for res in resolvents:
+                if not res:  # Clauza vidă = contradicție
+                    if verbose:
+                        print("═" * 60)
+                        print("❗ Contradicție în rezoluția clauzelor:")
+                        print(f"   Clauza {i + 1}: {c1}")
+                        print(f"   Clauza {j + 1}: {c2}")
+                        print("═" * 60)
+                    return False
+
+                frozen_res = frozenset(res)
+                if frozen_res not in derived:
+                    derived.add(frozen_res)
+                    new_clauses.append(res)
+
+        # Elimină tautologiile din noile clauze generate
+        new_clauses = scoate_tautologii(new_clauses)
+
+        if verbose and new_clauses:
+            print(f"\n[REZOLUȚIE] Pas {step + 1}:")
+            print(f"Clauze noi generate ({len(new_clauses)}):")
+            for clause in new_clauses:
+                print(f"  • {clause}")
+
+        if not new_clauses:
+            if verbose:
+                print("Nu s-au generat clauze noi - Formula SATISFIABILĂ")
+            return True
+
+        formula += new_clauses
+        step += 1
+
+    if verbose:
+        print("Limită de pași depășită - Nu s-a putut determina satisfiabilitatea")
+    return None
+
+
+def run_tests_from_file(filename, algorithm, verbose=False):
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            tests = f.readlines()
+
+        print(f"\n{'=' * 60}\n⚙️ TESTARE DIN FIȘIER: {filename}\n{'=' * 60}")
+
+        results = []
+        for line in tests:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            if ';' not in line:
+                print(f"\n⚠️ Linie ignorată (format invalid): {line}")
+                continue
+
+            formula_str, expected = line.split(';', 1)
+            expected = expected.upper().strip()
+
+            print(f"\n➡️ TEST: {formula_str}")
+            print(f"   Așteptat: {expected}")
+
+            formula = formula_parsata(formula_str)
+            if not formula:
+                print("❌ EROARE PARSARE - TEST IGNORAT")
+                results.append(False)
+                continue
+
+            try:
+                if algorithm == '1':
+                    ok, _ = dpll(formula, verbose=verbose)
+                    result_str = 'SAT' if ok else 'UNSAT'
+                elif algorithm == '2':
+                    ok = dp(formula, verbose=verbose)
+                    result_str = 'SAT' if ok else 'UNSAT'
+                elif algorithm == '3':
+                    ok = resolutie_solver(formula, verbose=verbose)
+                    result_str = 'SAT' if ok else 'UNSAT'
+                else:
+                    print(f"❌ Algoritm invalid: {algorithm}")
+                    result_str = 'EROARE'
+            except Exception as e:
+                print(f"❌ Eroare la executie: {str(e)}")
+                result_str = 'EROARE'
+
+            match = (result_str == expected)
+            results.append(match)
+            print(f"   Rezultat: {result_str} | {'✅ CORECT' if match else '❌ INCORECT'}")
+
+        passed = sum(results)
+        total = len(results)
+        print(f"\n{'=' * 60}\n📊 REZULTATE FINALE: {passed}/{total} corecte ({passed / total * 100:.1f}%)\n{'=' * 60}")
+
+    except FileNotFoundError:
+        print(f"\n❌ Fișierul {filename} nu există!")
+    except Exception as e:
+        print(f"\n❌ Eroare la procesarea fișierului: {str(e)}")
+def run():
+    print("\n" + "=" * 60)
+    print(" " * 10 + "SISTEM AVANSAT DE VERIFICARE SAT 2-CNF")
+    print("=" * 60)
+    print("Instrucțiuni:")
+    print("- Folosește ∨ pentru SAU, ∧ pentru ȘI")
+    print("- Negare: - (ex: -a sau -1)")
+    print("- Variabilele pot conține litere și cifre (x1, var2)")
+    print("- Exemple valide:")
+    print("  (a ∨ -b) ∧ (c ∨ d)")
+    print("  (1 ∨ -2) ∧ (-3 ∨ 4)")
+    print("=" * 60)
+
+
+    options = [
+        "1: Introducere manuală formulă",
+        "2: Generare automată formulă",
+        "3: Testare din fișier",
+        "4: Ieșire"
+    ]
+    print("\n".join(options))
+    choice = input("\nAlegeți opțiunea: ").strip()
+    if choice == '1':
+        input_formula = input("\nIntroduceți formula:\n>> ").strip()
+        formula = formula_parsata(input_formula)
+        if not formula:
+            print("\n❌ Formula invalidă! Trebuie să respecte următoarele:")
+            print("- Fiecare clauză între paranteze: (literal ∨ literal)")
+            print("- Literalii pot fi: variabilă (a-z, 0-9) sau -variabilă")
+            print("- Conector ∧ între clauze")
+            print("Exemplu corect: (a ∨ -b) ∧ (c ∨ d) ∧ (-x ∨ y)")
+            return
+        verbose=input("Afisare pasi detaliata? (da/nu): ").lower() == 'da'
+        print_formula_tabel(formula)  # Mutat după verificarea validității
+
+    elif choice == '2':
+        print("\n[INFO] Generare automată de formulă 2-CNF:")
+        n_vars = int(input("  - Număr de variabile: "))
+        n_clauses = int(input("  - Număr de clauze: "))
+        force_unsat = input("  - Vrei ca formula să fie nesatisfiabilă? (da/nu): ").strip().lower() == 'da'
+        formula = genereaza_2cnf_formula(n_vars, n_clauses, force_unsat)
+        print("\n[INFO] Formula generată:")
+        print(" ", formula_to_string(formula))
+        print_formula_tabel(formula)
+        verbose = input("Afisare pasi detaliati? (da/nu): ").lower() == 'da'
+    elif choice == '3':
+        filename = input("\nIntroduceți numele fișierului cu teste (ex: teste.txt): ").strip()
+        print("\nAlege algoritmul de rezolvare:")
+        print("1. DPLL (Davis–Putnam–Logemann–Loveland)")
+        print("2. DP (Rezoluție clasică)")
+        print("3. Rezoluție clasică (completă)")
+        alg = input(">> ").strip()
+        verbose = input("Afisare pasi detaliata pentru fiecare test? (da/nu): ").lower() == 'da'
+        run_tests_from_file(filename, alg, verbose)
+        return
+    elif choice == '4':
+        return
+    else:
+        print("\n[Eroare] Opțiune invalidă. Încearcă din nou.")
+        return
+
+    print("\nAlege algoritmul de rezolvare:")
+    print("1. DPLL (Davis–Putnam–Logemann–Loveland)")
+    print("2. DP (Rezoluție clasică)")
+    print("3. Rezoluție clasică (completă)")
+    alg = input(">> ").strip()
+
+    print("\n" + "-" * 60)
+    import time
+    start_time = time.time()
+
+    if alg == '1':
+        print("\n[INFO] Rulare DPLL cu optimizări...")
+        ok, result = dpll(formula, verbose=verbose)
+        elapsed = time.time() - start_time
+
+        print("\n=== REZULTATE ===")
+        print(f"Timp execuție: {elapsed:.4f} secunde")
+        if ok:
+            print("✅ SATISFIABILĂ")
+            clean_result = {lit.replace("(", "").replace(")", "") if isinstance(lit, str) else lit for lit in result}
+            print("Atribuire minimă:", sorted(clean_result, key=lambda x: str(x)))
+            print("\nValidare manuală:")
+            for i, clause in enumerate(formula, 1):
+                sat = any(lit in clean_result for lit in clause)
+                print(f"Clauza {i}: {clause} {'✓' if sat else '✗'}")
+        else:
+            print("❌ NESATISFIABILĂ")
+
+    elif alg == '2':
+        print("\n[INFO] Rulare algoritm DP...")
+        ok = dp(formula, verbose=verbose)
+        print("\n=== REZULTAT DP ===")
+        print("✅ SATISFIABILĂ" if ok else "❌ NESATISFIABILĂ")
+
+    elif alg == '3':
+        print("\n[INFO] Rulare Rezoluție clasică...")
+        ok = resolutie_solver(formula, verbose=verbose)
+        elapsed = time.time() - start_time
+        print("\n=== REZULTATE REZOLUȚIE ===")
+        print(f"Timp execuție: {elapsed:.4f} secunde")
+        print("❌ NESATISFIABILĂ" if not ok else "✅ SATISFIABILĂ")
+
+    else:
+        print("Opțiune invalidă!")
+
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    run()
