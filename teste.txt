@@ -1,0 +1,8 @@
+# Format: formulă;rezultat_asteptat(SAT/UNSAT)
+
+(a ∨ a) ∧ (-a ∨ -a);UNSAT
+(a ∨ b) ∧ (a ∨ -b) ∧ (-a ∨ b) ∧ (-a ∨ -b);UNSAT
+(a ∨ -b) ∧ (b ∨ -c);SAT
+(x ∨ y) ∧ (-y ∨ z) ∧ (-z ∨ x);SAT
+(1 ∨ 2) ∧ (-1 ∨ 3) ∧ (-2 ∨ -3);SAT
+(a ∨ a) ∧ (-a ∨ b) ∧ (-b ∨ -a);UNSAT
